@@ -1,208 +1,407 @@
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  runApp(const FoodApp());
+  runApp(const NotesApp());
 }
 
-class FoodApp extends StatelessWidget {
-  const FoodApp({super.key});
+class NotesApp extends StatelessWidget {
+  const NotesApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      title: 'Notes',
       theme: ThemeData(
-        scaffoldBackgroundColor: Colors.white,
-        fontFamily: 'Roboto',
+        useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFFAFAFA),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFFF741F),
+          seedColor: Colors.black,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFFFAFAFA),
+          surfaceTintColor: Colors.transparent,
         ),
       ),
-      home: const OnboardingScreen(),
+      home: const NotesHomePage(),
     );
   }
 }
 
-class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+class Note {
+  final String id;
+  final String title;
+  final String content;
+  final DateTime createdAt;
 
-  @override
-  State<OnboardingScreen> createState() =>
-      _OnboardingScreenState();
+  Note({
+    required this.id,
+    required this.title,
+    required this.content,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'content': content,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
+
+  factory Note.fromJson(Map<String, dynamic> json) {
+    return Note(
+      id: json['id'],
+      title: json['title'],
+      content: json['content'],
+      createdAt: DateTime.parse(json['createdAt']),
+    );
+  }
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
-  int currentPage = 0;
+class NotesHomePage extends StatefulWidget {
+  const NotesHomePage({super.key});
 
-  final List<Map<String, String>> pages = [
-    {
-      'title': 'Discover new tastes',
-      'description':
-      'Explore delicious meals and discover your next favorite.',
-    },
-    {
-      'title': 'All your favorites',
-      'description':
-      'Get all your loved foods in one place,\nyou just place the order we do the rest',
-    },
-    {
-      'title': 'Fast delivery',
-      'description':
-      'Enjoy your favorite food delivered right to your door.',
-    },
-    {
-      'title': 'Enjoy your meal',
-      'description':
-      'Order now and enjoy delicious food whenever you want.',
-    },
-  ];
+  @override
+  State<NotesHomePage> createState() => _NotesHomePageState();
+}
 
-  static const orange = Color(0xFFFF741F);
-  static const textColor = Color(0xFF373743);
-  static const mutedColor = Color(0xFF85879F);
+class _NotesHomePageState extends State<NotesHomePage> {
+  static const String _storageKey = 'saved_notes';
 
-  void nextPage() {
-    if (currentPage < pages.length - 1) {
-      setState(() {
-        currentPage++;
-      });
-    } else {
-      // Navigate to your login or home screen.
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Onboarding completed')),
-      );
+  List<Note> _notes = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotes();
+  }
+
+  // Load notes when the app opens.
+  Future<void> _loadNotes() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedData = prefs.getString(_storageKey);
+
+      if (savedData != null) {
+        final List<dynamic> decoded = jsonDecode(savedData);
+
+        _notes = decoded
+            .map((item) => Note.fromJson(
+          Map<String, dynamic>.from(item),
+        ))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('Error loading notes: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  void skipOnboarding() {
+  // Save the complete list locally.
+  Future<void> _saveNotes() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final encoded = jsonEncode(
+      _notes.map((note) => note.toJson()).toList(),
+    );
+
+    await prefs.setString(_storageKey, encoded);
+  }
+
+  // Add a new note.
+  Future<void> _addNote(String title, String content) async {
+    final note = Note(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      title: title,
+      content: content,
+      createdAt: DateTime.now(),
+    );
+
     setState(() {
-      currentPage = pages.length - 1;
+      _notes.insert(0, note);
     });
+
+    try {
+      await _saveNotes();
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _notes.removeWhere((item) => item.id == note.id);
+        });
+      }
+      rethrow;
+    }
+  }
+
+  // Delete a note.
+  Future<void> _deleteNote(Note note) async {
+    final originalIndex = _notes.indexOf(note);
+
+    setState(() {
+      _notes.remove(note);
+    });
+
+    try {
+      await _saveNotes();
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _notes.insert(originalIndex, note);
+        });
+      }
+    }
+  }
+
+  Future<void> _openAddNote() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddNotePage(onSave: _addNote),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final screenHeight = constraints.maxHeight;
-
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                children: [
-                  // Illustration area
-                  SizedBox(
-                    height: screenHeight * 0.57,
-                    width: double.infinity,
-                    child: Center(
-                      child: Image.asset(
-                        'assets/images/onboarding.png',
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const Icon(
-                            Icons.fastfood,
-                            size: 120,
-                            color: orange,
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // Heading
-                  Text(
-                    pages[currentPage]['title']!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: textColor,
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Description
-                  Text(
-                    pages[currentPage]['description']!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      height: 1.6,
-                      color: mutedColor,
-                    ),
-                  ),
-
-                  const SizedBox(height: 26),
-
-                  // Page indicators
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(
-                      pages.length,
-                          (index) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 5,
-                        ),
-                        width: 9,
-                        height: 9,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: currentPage == index
-                              ? orange
-                              : const Color(0xFFFFE0D0),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const Spacer(),
-
-                  // Next button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: ElevatedButton(
-                      onPressed: nextPage,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: orange,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(11),
-                        ),
-                      ),
-                      child: const Text(
-                        'NEXT',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Skip button
-                  TextButton(
-                    onPressed: skipOnboarding,
-                    child: const Text(
-                      'Skip',
-                      style: TextStyle(
-                        color: mutedColor,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                ],
+      appBar: AppBar(
+        title: const Text(
+          'My Notes',
+          style: TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      body: _isLoading
+          ? const Center(
+        child: CircularProgressIndicator(),
+      )
+          : _notes.isEmpty
+          ? const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.note_alt_outlined,
+              size: 64,
+              color: Colors.grey,
+            ),
+            SizedBox(height: 12),
+            Text(
+              'No notes yet',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
               ),
-            );
-          },
+            ),
+            SizedBox(height: 6),
+            Text(
+              'Tap + to create your first note',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ],
+        ),
+      )
+          : ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: _notes.length,
+        separatorBuilder: (_, __) =>
+        const SizedBox(height: 10),
+        itemBuilder: (context, index) {
+          final note = _notes[index];
+
+          return Card(
+            elevation: 0,
+            color: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(
+                color: Color(0xFFEEEEEE),
+              ),
+            ),
+            child: ListTile(
+              contentPadding: const EdgeInsets.all(16),
+              title: Text(
+                note.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  note.content,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              trailing: IconButton(
+                icon: const Icon(
+                  Icons.delete_outline,
+                  color: Colors.grey,
+                ),
+                onPressed: () => _deleteNote(note),
+              ),
+            ),
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openAddNote,
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+class AddNotePage extends StatefulWidget {
+  final Future<void> Function(String title, String content) onSave;
+
+  const AddNotePage({
+    super.key,
+    required this.onSave,
+  });
+
+  @override
+  State<AddNotePage> createState() => _AddNotePageState();
+}
+
+class _AddNotePageState extends State<AddNotePage> {
+  final _titleController = TextEditingController();
+  final _contentController = TextEditingController();
+
+  bool _isSaving = false;
+
+  Future<void> _save() async {
+    final title = _titleController.text.trim();
+    final content = _contentController.text.trim();
+
+    if (title.isEmpty && content.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a title or note'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      await widget.onSave(
+        title.isEmpty ? 'Untitled' : title,
+        content,
+      );
+
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not save note. Please try again.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _contentController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('New Note'),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: _isSaving
+              ? null
+              : () => Navigator.pop(context),
+        ),
+        actions: [
+          TextButton(
+            onPressed: _isSaving ? null : _save,
+            child: _isSaving
+                ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+              ),
+            )
+                : const Text(
+              'Save',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            TextField(
+              controller: _titleController,
+              autofocus: true,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+              decoration: const InputDecoration(
+                hintText: 'Title',
+                border: InputBorder.none,
+              ),
+            ),
+            const Divider(),
+            Expanded(
+              child: TextField(
+                controller: _contentController,
+                expands: true,
+                maxLines: null,
+                minLines: null,
+                textAlignVertical: TextAlignVertical.top,
+                decoration: const InputDecoration(
+                  hintText: 'Start writing...',
+                  border: InputBorder.none,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
