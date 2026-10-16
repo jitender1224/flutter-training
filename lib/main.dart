@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'bloc/notes_bloc.dart';
+import 'bloc/notes_event.dart';
 import 'screens/notes_home_page.dart';
+import 'services/note_storage_service.dart';
 
 void main() {
   runApp(const NotesApp());
@@ -23,7 +27,13 @@ class NotesApp extends StatelessWidget {
           surfaceTintColor: Colors.transparent,
         ),
       ),
-      home: const NotesHomePage(),
+      home: BlocProvider(
+        create:
+            (_) =>
+                NotesBloc(storageService: NoteStorageService())
+                  ..add(LoadNotesRequested()),
+        child: const NotesHomePage(),
+      ),
     );
   }
 }
