@@ -1,38 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'bloc/notes_bloc.dart';
-import 'bloc/notes_event.dart';
-import 'screens/notes_home_page.dart';
-import 'services/note_storage_service.dart';
+import 'core/dio_client.dart';
+import 'features/news/data/repositories/news_repository.dart';
+import 'features/news/presentation/bloc/news_bloc.dart';
+import 'features/news/presentation/screens/home_screen.dart';
 
 void main() {
-  runApp(const NotesApp());
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final api = createNewsApi();
+  final repository = NewsRepository(api);
+
+  runApp(DailyNewsApp(repository: repository));
 }
 
-class NotesApp extends StatelessWidget {
-  const NotesApp({super.key});
+class DailyNewsApp extends StatelessWidget {
+  final NewsRepository repository;
+
+  const DailyNewsApp({super.key, required this.repository});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'Daily News',
       debugShowCheckedModeBanner: false,
-      title: 'Notes',
       theme: ThemeData(
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFFAFAFA),
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.black),
+        colorSchemeSeed: Colors.indigo,
+        scaffoldBackgroundColor: Colors.white,
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFFAFAFA),
-          surfaceTintColor: Colors.transparent,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          elevation: 0,
         ),
       ),
       home: BlocProvider(
-        create:
-            (_) =>
-                NotesBloc(storageService: NoteStorageService())
-                  ..add(LoadNotesRequested()),
-        child: const NotesHomePage(),
+        create: (_) => NewsBloc(repository),
+        child: const HomeScreen(),
       ),
     );
   }

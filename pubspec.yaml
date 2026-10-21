@@ -36,6 +36,10 @@ dependencies:
   cupertino_icons: ^1.0.8
   shared_preferences: ^2.5.3
   flutter_bloc: ^9.1.1
+  equatable: ^3.0.0
+  dio: ^5.11.1
+  retrofit: ^4.6.0
+  json_annotation: ^4.9.0
 
 dev_dependencies:
   flutter_test:
@@ -47,6 +51,9 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+  retrofit_generator: ^9.7.0
+  json_serializable: ^6.9.5
+  build_runner: ^2.5.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
